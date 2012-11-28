@@ -1,0 +1,6 @@
+2 methods
+ - basic 
+ - ensemble
+
+Should be able to generate a classifier
+ - should be able to assign labels to unseens test data instances
