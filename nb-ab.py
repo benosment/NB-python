@@ -6,6 +6,7 @@
 import sys
 import math
 import pdb
+import random
 
 class TrainingExample:
     def __init__(self, class_label, attributes):
@@ -26,11 +27,10 @@ class NaiveBayes:
         self.neg_freq = []
         self.attribute_values = []
 
-    def train(self, train_filename):
+    def train(self, train_data):
         # read a file, add each line as a new example
         created_freq = False
-        for line in open(train_filename):
-            data_instance = line.strip().split('\t')
+        for data_instance in train_data:
             class_label = data_instance.pop(0)
             attributes = data_instance
             if not created_freq:
@@ -94,17 +94,17 @@ class NaiveBayes:
         #print "neg_p", self.p_neg_attr
 #        pdb.set_trace()
             
-    def test(self, data, labels):
+    def test(self, data):
         tp = 0
         tn = 0
         fp = 0
         fn = 0
         errors = []
-        for i in range(len(data)):
-            data_instance = data[i]
-            class_label = labels[i]
+        for data_instance in data:
+            class_label = data_instance.pop(0)
+            attributes = data_instance
             #pdb.set_trace()
-            predicted_label = self.classify(data_instance)
+            predicted_label = self.classify(attributes)
             if class_label == '+1':
                 if predicted_label == '+1':
                     tp += 1
@@ -135,14 +135,34 @@ class NaiveBayes:
             return '-1'
 
 def read_data(filename):
-    labels = []
+#    labels = []
     data = []
     for line in open(filename):
         data_instance = line.strip().split('\t')
-        class_label = data_instance.pop(0)
-        labels.append(class_label)
+#        class_label = data_instance.pop(0)
+#        labels.append(class_label)
         data.append(data_instance)
-    return data, labels
+    return data
+#    return data, labels
+
+class WeightedRandomSample:
+    def __init__(self, data, weights):
+        self.data = data
+        weight_sum = 0.0
+        self.weights = []
+        for weight in weights:
+            weight_sum += weight
+            self.weights.append(weight_sum)
+
+    def sample(self):
+        # take a random sample
+        random_weight = random.random()
+        # find which element this corresponds to
+        i = 0
+        while (random_weight > self.weights[i]):
+            i += 1
+        #print "i=", i, " weights=", self.weights[i], " random_weight=", random_weight
+        return self.data[i]
 
 if __name__ == '__main__':
     # TODO: add num iterations
@@ -153,11 +173,12 @@ if __name__ == '__main__':
     train_filename = sys.argv[1]
     test_filename = sys.argv[2]
 
-    train_set, train_labels = read_training_data(train_filename)
+    #train_set, train_labels = read_data(train_filename)
+    train_set = read_data(train_filename)
 
     print len(train_set)
     num_train = len(train_set)
-    # initial have D set to 1/|D|
+    # initial have D (weights) set to 1/|D|
     D = [1.0/len(train_set) for test in train_set]
 
     classifier_list = []
@@ -170,11 +191,10 @@ if __name__ == '__main__':
         random_sample = [wrs.sample() for i in range(num_train)]
         # train classifier using that sample
         nb.train(random_sample)
-
         # classify exisiting training set
         # TODO: use the full set...right? 
         # test accuracy by classifying the (original) training  set
-        tp, tn, fp, fn, errors = nb.test(train_set, train_labels) 
+        tp, tn, fp, fn, errors = nb.test(train_set) 
         accuracy = (tp+tn) / (tp+tn+fp+fn)
         # TODO: calculate alpha
         # TODO: for each training example, if prediction was correct, 
