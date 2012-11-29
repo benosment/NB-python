@@ -94,27 +94,32 @@ class NaiveBayes:
         #print "neg_p", self.p_neg_attr
 #        pdb.set_trace()
             
-    def test(self, test_filename, D):
+    def test(self, data, labels):
         tp = 0
         tn = 0
         fp = 0
         fn = 0
-        for line in open(test_filename):
-            data_instance = line.strip().split('\t')
-            class_label = data_instance.pop(0)
+        errors = []
+        for i in range(len(data)):
+            data_instance = data[i]
+            class_label = labels[i]
             #pdb.set_trace()
             predicted_label = self.classify(data_instance)
             if class_label == '+1':
                 if predicted_label == '+1':
                     tp += 1
+                    errors.append(0)
                 else:
                     fn += 1
+                    errors.append(-1)
             else:
                 if predicted_label == '-1':
                     tn += 1
+                    errors.append(0)
                 else:
                     fp += 1
-        return tp, tn, fp, fn
+                    errors.append(-1)
+        return tp, tn, fp, fn, errors
 
     def classify(self, attribute_vector):
         pos_prob = self.p_pos
@@ -129,28 +134,62 @@ class NaiveBayes:
         else:
             return '-1'
 
+def read_data(filename):
+    labels = []
+    data = []
+    for line in open(filename):
+        data_instance = line.strip().split('\t')
+        class_label = data_instance.pop(0)
+        labels.append(class_label)
+        data.append(data_instance)
+    return data, labels
+
 if __name__ == '__main__':
+    # TODO: add num iterations
     if len(sys.argv) != 3:
         print "Usage: nb.py training_file testing_file"
         sys.exit()
-    train_set = sys.argv[1]
-    test_set = sys.argv[2]
-    
-    print len(test_set)
+
+    train_filename = sys.argv[1]
+    test_filename = sys.argv[2]
+
+    train_set, train_labels = read_training_data(train_filename)
+
+    print len(train_set)
+    num_train = len(train_set)
     # initial have D set to 1/|D|
-    D = [1.0/len(test_set) for test in test_set]
+    D = [1.0/len(train_set) for test in train_set]
 
     classifier_list = []
 
     for i in range(10):
         nb = NaiveBayes()
-        # parse the training data
-        nb.train(sys.argv[1], D)
+        # create a weighted random sample based off of D
+        wrs = WeightedRandomSample(train_set, D)
+        # sample N times
+        random_sample = [wrs.sample() for i in range(num_train)]
+        # train classifier using that sample
+        nb.train(random_sample)
 
-    accuracy = (tp+tn) / (tp+tn+fp+fn)
-    classifier_list.append((nb, accuracy))
-    if (fp == fn == 0):
-        break
+        # classify exisiting training set
+        # TODO: use the full set...right? 
+        # test accuracy by classifying the (original) training  set
+        tp, tn, fp, fn, errors = nb.test(train_set, train_labels) 
+        accuracy = (tp+tn) / (tp+tn+fp+fn)
+        # TODO: calculate alpha
+        # TODO: for each training example, if prediction was correct, 
+        # decrease weight by alpha, otherwhise increase weight by alpha
+        for j in range(len(errors)):
+            if errors[j] == -1:
+                pass
+            else:
+                pass
+
+        # normalize D so that is sums to 1
+
+        classifier_list.append((nb, alpha))
+        if (fp == fn == 0):
+            break
 
     # evaluate performance
     tp, tn, fp, fn = nb.test(test_set, D)
