@@ -15,7 +15,7 @@ class TrainingExample:
 
 
 class NaiveBayes:
-    def __init__(self):
+    def __init__(self, attribute_values):
         # initial count of attributes
         #self.N = 0
         # list of training data points
@@ -25,51 +25,58 @@ class NaiveBayes:
         self.neg_cnt = 0 # negative training instances
         self.pos_freq = []
         self.neg_freq = []
-        self.attribute_values = []
+        self.attribute_values = attribute_values
 
     def train(self, train_data):
         # read a file, add each line as a new example
         created_freq = False
+        print "train: ", len(train_data), len(train_data[0])
+        error_cnt = 0
         for data_instance in train_data:
+            if len(data_instance) != 25:
+                error_cnt += 1
+        print "error, before", error_cnt
+        cnt = 0
+        for di in train_data:
+            data_instance = di[:]
             class_label = data_instance.pop(0)
-            attributes = data_instance
+            cnt += 1
+            if len(data_instance) != 24:
+                #pdb.set_trace()
+                error_cnt += 1
+
             if not created_freq:
                 created_freq = True
                 # create an array of dictionaries to store the
                 # frequency of each attribute
-                for attribute in attributes:
+                for attribute in data_instance:
                     self.pos_freq.append({})
                     self.neg_freq.append({})
-                    self.attribute_values.append([])
                     #self.pos_freq = [{}] * len(attributes)
                     #self.neg_freq = [{}] * len(attributes)
             if class_label == '+1':
                 self.pos_cnt += 1
-                for i in range(len(attributes)):
-                    self.attribute_values[i].append(attributes[i])
-                    self.pos_freq[i][attributes[i]] = self.pos_freq[i].get(attributes[i], 0) + 1
+                for i in range(len(data_instance)):
+                    self.pos_freq[i][data_instance[i]] = self.pos_freq[i].get(data_instance[i], 0) + 1
             else:
                 self.neg_cnt += 1
-                for i in range(len(attributes)):
-                    self.attribute_values[i].append(attributes[i])
-                    self.neg_freq[i][attributes[i]] = self.neg_freq[i].get(attributes[i], 0) + 1
+                for i in range(len(data_instance)):
+                    self.neg_freq[i][data_instance[i]] = self.neg_freq[i].get(data_instance[i], 0) + 1
             self.N += 1
             #example = TrainingExample(class_label, attribute)
         print "n=%d, num_pos=%d, num_neg=%d num_features=%d" % \
-        (self.N, self.pos_cnt, self.neg_cnt, len(attributes))
+        (self.N, self.pos_cnt, self.neg_cnt, len(data_instance))
         #print "positive", self.pos_freq
         #print
         #print "negative", self.neg_freq
         #print
 
+        print error_cnt
         # create probability from frequency counts
         self.p_pos = math.log(self.pos_cnt / float(self.N))
         self.p_neg = math.log(self.neg_cnt / float(self.N))
         self.p_pos_attr = []
         self.p_neg_attr = []
-        # create a set out of each of the attributes
-        for i in range(len(self.attribute_values)):
-            self.attribute_values[i] = set(self.attribute_values[i])
         for i in range(len(self.pos_freq)):
             d = {}
             denom = float(self.pos_cnt) + len(self.attribute_values[i])
@@ -100,7 +107,9 @@ class NaiveBayes:
         fp = 0
         fn = 0
         errors = []
-        for data_instance in data:
+        #pdb.set_trace()
+        for di in data:
+            data_instance = di[:]
             class_label = data_instance.pop(0)
             attributes = data_instance
             #pdb.set_trace()
@@ -124,10 +133,12 @@ class NaiveBayes:
     def classify(self, attribute_vector):
         pos_prob = self.p_pos
         neg_prob = self.p_neg
+#        try:
         for i in range(len(attribute_vector)):
             pos_prob += self.p_pos_attr[i][attribute_vector[i]]
             neg_prob += self.p_neg_attr[i][attribute_vector[i]]
-
+#        except:
+#            pdb.set_trace()
         #print pos_prob, neg_prob
         if pos_prob > neg_prob:
             return '+1'
@@ -135,19 +146,26 @@ class NaiveBayes:
             return '-1'
 
 def read_data(filename):
-#    labels = []
+    labels = []
     data = []
+    full = [] 
+    err_cnt = 0
     for line in open(filename):
         data_instance = line.strip().split('\t')
-#        class_label = data_instance.pop(0)
-#        labels.append(class_label)
+        full.append(data_instance[:])
+        class_label = data_instance.pop(0)
+        if len(data_instance) != 24:
+            err_cnt += 1
+        labels.append(class_label)
         data.append(data_instance)
-    return data
+    print "err", err_cnt
+    return full, labels, data
 #    return data, labels
 
 class WeightedRandomSample:
     def __init__(self, data, weights):
         self.data = data
+        print "WRS: ", len(data), len(data[0])
         weight_sum = 0.0
         self.weights = []
         for weight in weights:
@@ -162,6 +180,8 @@ class WeightedRandomSample:
         while (random_weight > self.weights[i]):
             i += 1
         #print "i=", i, " weights=", self.weights[i], " random_weight=", random_weight
+#        if len(self.data[i]) != 25:
+ #           print "error"
         return self.data[i]
 
 if __name__ == '__main__':
@@ -174,28 +194,56 @@ if __name__ == '__main__':
     test_filename = sys.argv[2]
 
     #train_set, train_labels = read_data(train_filename)
-    train_set = read_data(train_filename)
+    train_full, train_labels, train_data  = read_data(train_filename)
 
-    print len(train_set)
-    num_train = len(train_set)
+    created_freq = False
+    attribute_values = []
+    # get set of all attributes
+    for data_instance in train_data:
+        if not created_freq:
+            created_freq = True
+            # create an array of dictionaries to store the
+            # frequency of each attribute
+            for attribute in data_instance:
+                attribute_values.append([])
+        for i in range(len(data_instance)):
+            attribute_values[i].append(data_instance[i])
+
+    # create a set out of each of the attributes
+    for i in range(len(attribute_values)):
+        attribute_values[i] = set(attribute_values[i])
+
+    #print len(train_set)
+
+    # need to account for label
+    num_train = len(train_data)
     # initial have D (weights) set to 1/|D|
-    D = [1.0/len(train_set) for test in train_set]
+    D = [1.0/len(train_data) for data in train_data]
 
     classifier_list = []
 
-    for i in range(10):
-        nb = NaiveBayes()
+    for i in range(2):
+        nb = NaiveBayes(attribute_values[:])
         # create a weighted random sample based off of D
-        wrs = WeightedRandomSample(train_set, D)
+        wrs = WeightedRandomSample(train_full[:], D)
         # sample N times
         random_sample = [wrs.sample() for i in range(num_train)]
+        print "RS, ", len(random_sample), len(random_sample[0])
         # train classifier using that sample
+        err_cnt = 0
+        for sam in random_sample:
+            if len(sam) != 25:
+                err_cnt += 1
+        print "Error", err_cnt
         nb.train(random_sample)
         # classify exisiting training set
         # TODO: use the full set...right? 
         # test accuracy by classifying the (original) training  set
-        tp, tn, fp, fn, errors = nb.test(train_set) 
-        accuracy = (tp+tn) / (tp+tn+fp+fn)
+        tp, tn, fp, fn, errors = nb.test(train_full[:]) 
+        print tp, tn, fp, fn
+        error = float((fp+fn)) / (tp+tn+fp+fn)
+        alpha = 0.5 * math.log((1.0 - error) / max(error, 1e-16))
+        print "alpha", alpha, error
         # TODO: calculate alpha
         # TODO: for each training example, if prediction was correct, 
         # decrease weight by alpha, otherwhise increase weight by alpha
