@@ -30,20 +30,10 @@ class NaiveBayes:
     def train(self, train_data):
         # read a file, add each line as a new example
         created_freq = False
-        print "train: ", len(train_data), len(train_data[0])
-        error_cnt = 0
-        for data_instance in train_data:
-            if len(data_instance) != 25:
-                error_cnt += 1
-        print "error, before", error_cnt
-        cnt = 0
+        #print "train: ", len(train_data), len(train_data[0])
         for di in train_data:
-            data_instance = di[:]
-            class_label = data_instance.pop(0)
-            cnt += 1
-            if len(data_instance) != 24:
-                #pdb.set_trace()
-                error_cnt += 1
+            class_label = di[0]
+            data_instance = di[1:]
 
             if not created_freq:
                 created_freq = True
@@ -64,14 +54,9 @@ class NaiveBayes:
                     self.neg_freq[i][data_instance[i]] = self.neg_freq[i].get(data_instance[i], 0) + 1
             self.N += 1
             #example = TrainingExample(class_label, attribute)
-        print "n=%d, num_pos=%d, num_neg=%d num_features=%d" % \
-        (self.N, self.pos_cnt, self.neg_cnt, len(data_instance))
-        #print "positive", self.pos_freq
-        #print
-        #print "negative", self.neg_freq
-        #print
+        #print "n=%d, num_pos=%d, num_neg=%d num_features=%d" % \
+        #(self.N, self.pos_cnt, self.neg_cnt, len(data_instance))
 
-        print error_cnt
         # create probability from frequency counts
         self.p_pos = math.log(self.pos_cnt / float(self.N))
         self.p_neg = math.log(self.neg_cnt / float(self.N))
@@ -92,27 +77,15 @@ class NaiveBayes:
                 d[key] = math.log(num / float(denom))
             self.p_neg_attr.append(d)
 
-        #print "attribute features", self.attribute_values
-        #print "p_pos_class", self.p_pos
-        #print "p_neg_class", self.p_neg
-        #print
-        #print "pos_p", self.p_pos_attr
-        #print
-        #print "neg_p", self.p_neg_attr
-#        pdb.set_trace()
-            
     def test(self, data):
         tp = 0
         tn = 0
         fp = 0
         fn = 0
         errors = []
-        #pdb.set_trace()
         for di in data:
-            data_instance = di[:]
-            class_label = data_instance.pop(0)
-            attributes = data_instance
-            #pdb.set_trace()
+            class_label = di[0]
+            attributes = di[1:]
             predicted_label = self.classify(attributes)
             if class_label == '+1':
                 if predicted_label == '+1':
@@ -149,23 +122,47 @@ def read_data(filename):
     labels = []
     data = []
     full = [] 
-    err_cnt = 0
     for line in open(filename):
         data_instance = line.strip().split('\t')
         full.append(data_instance[:])
         class_label = data_instance.pop(0)
-        if len(data_instance) != 24:
-            err_cnt += 1
         labels.append(class_label)
         data.append(data_instance)
-    print "err", err_cnt
     return full, labels, data
-#    return data, labels
 
+
+def test_ensemble(classifiers, filename):
+    tp = 0
+    fp = 0
+    tn = 0
+    fn = 0
+    for line in open(filename):
+        data_instance = line.strip().split('\t')
+        class_label = data_instance.pop(0)
+        prediction = 0.0
+        for (classifier, alpha) in classifiers:
+            predicted_label = classifier.classify(data_instance)
+            if predicted_label == '+1':
+                prediction += 1.0 * alpha
+            else:
+                prediction -= 1.0 * alpha
+
+        if class_label == '+1':
+            if prediction > 0:
+                tp += 1
+            else:
+                fn += 1
+        else:
+            if prediction < 0:
+                tn += 1
+            else:
+                fp += 1
+
+    return tp, tn, fp, fn
+            
 class WeightedRandomSample:
     def __init__(self, data, weights):
         self.data = data
-        print "WRS: ", len(data), len(data[0])
         weight_sum = 0.0
         self.weights = []
         for weight in weights:
@@ -179,9 +176,6 @@ class WeightedRandomSample:
         i = 0
         while (random_weight > self.weights[i]):
             i += 1
-        #print "i=", i, " weights=", self.weights[i], " random_weight=", random_weight
-#        if len(self.data[i]) != 25:
- #           print "error"
         return self.data[i]
 
 if __name__ == '__main__':
@@ -193,7 +187,6 @@ if __name__ == '__main__':
     train_filename = sys.argv[1]
     test_filename = sys.argv[2]
 
-    #train_set, train_labels = read_data(train_filename)
     train_full, train_labels, train_data  = read_data(train_filename)
 
     created_freq = False
@@ -222,45 +215,52 @@ if __name__ == '__main__':
 
     classifier_list = []
 
-    for i in range(2):
+    for i in range(8):
         nb = NaiveBayes(attribute_values[:])
         # create a weighted random sample based off of D
-        wrs = WeightedRandomSample(train_full[:], D)
+        wrs = WeightedRandomSample(train_full, D)
+
         # sample N times
         random_sample = [wrs.sample() for i in range(num_train)]
-        print "RS, ", len(random_sample), len(random_sample[0])
         # train classifier using that sample
-        err_cnt = 0
-        for sam in random_sample:
-            if len(sam) != 25:
-                err_cnt += 1
-        print "Error", err_cnt
         nb.train(random_sample)
         # classify exisiting training set
         # TODO: use the full set...right? 
         # test accuracy by classifying the (original) training  set
-        tp, tn, fp, fn, errors = nb.test(train_full[:]) 
-        print tp, tn, fp, fn
-        error = float((fp+fn)) / (tp+tn+fp+fn)
-        alpha = 0.5 * math.log((1.0 - error) / max(error, 1e-16))
-        print "alpha", alpha, error
-        # TODO: calculate alpha
-        # TODO: for each training example, if prediction was correct, 
-        # decrease weight by alpha, otherwhise increase weight by alpha
+        tp, tn, fp, fn, errors = nb.test(train_full) 
+        #print tp, tn, fp, fn
+        accuracy = float((tp+tn)) / (tp+tn+fp+fn)
+
+        # calculate alpha
+        alpha = 0.5 * math.log(accuracy / max((1.0-accuracy), 1e-16))
+        #print "alpha=", alpha, "accuracy=", accuracy
+
+        # adjust weights
         for j in range(len(errors)):
             if errors[j] == -1:
-                pass
+                # prediction was incorrect, increase weight
+                #print "wrong increasing weight old D" , D[j], "alpha", alpha
+                D[j] = D[j] * math.exp(alpha)
+                #print D[j]
             else:
-                pass
-
+                # prediction was correct, decrease weight
+                #print "right decreasing weight old D" , D[j], "alpha", alpha
+                D[j] = D[j] * math.exp(-alpha)
+                #print D[j]
         # normalize D so that is sums to 1
+        D_sum = sum(D)
+        D = [D_weight/D_sum for D_weight in D]
 
         classifier_list.append((nb, alpha))
+
         if (fp == fn == 0):
             break
 
     # evaluate performance
-    tp, tn, fp, fn = nb.test(test_set, D)
+    tp, tn, fp, fn = test_ensemble(classifier_list, test_filename)
+
+    # test_full, test_labels, test_data  = read_data(test_filename)
+    # tp, tn, fp, fn = nb.test(test_full)
     tp = float(tp)
     tn = float(tn)
     fp = float(fp)

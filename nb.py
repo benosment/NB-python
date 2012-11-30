@@ -16,7 +16,6 @@ class TrainingExample:
 class NaiveBayes:
     def __init__(self):
         # initial count of attributes
-        #self.N = 0
         # list of training data points
         self.training_data = []
         self.N = 0 # total number of training instances
@@ -41,8 +40,6 @@ class NaiveBayes:
                     self.pos_freq.append({})
                     self.neg_freq.append({})
                     self.attribute_values.append([])
-                    #self.pos_freq = [{}] * len(attributes)
-                    #self.neg_freq = [{}] * len(attributes)
             if class_label == '+1':
                 self.pos_cnt += 1
                 for i in range(len(attributes)):
@@ -54,14 +51,8 @@ class NaiveBayes:
                     self.attribute_values[i].append(attributes[i])
                     self.neg_freq[i][attributes[i]] = self.neg_freq[i].get(attributes[i], 0) + 1
             self.N += 1
-            #example = TrainingExample(class_label, attribute)
         print "n=%d, num_pos=%d, num_neg=%d num_features=%d" % \
         (self.N, self.pos_cnt, self.neg_cnt, len(attributes))
-        #print "positive", self.pos_freq
-        #print
-        #print "negative", self.neg_freq
-        #print
-
         # create probability from frequency counts
         self.p_pos = math.log(self.pos_cnt / float(self.N))
         self.p_neg = math.log(self.neg_cnt / float(self.N))
